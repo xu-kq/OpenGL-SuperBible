@@ -138,8 +138,7 @@ if (OPENMP_FOUND)
 endif()
 
 foreach(EXAMPLE ${EXAMPLES})
-  add_executable(${EXAMPLE} WIN32 src/${EXAMPLE}/${EXAMPLE}.cpp
-          main.cpp)
+  add_executable(${EXAMPLE} WIN32 src/${EXAMPLE}/${EXAMPLE}.cpp)
   set_property(TARGET ${EXAMPLE} PROPERTY DEBUG_POSTFIX _d)
   target_link_libraries(${EXAMPLE} ${COMMON_LIBS})
   if(MSVC)
