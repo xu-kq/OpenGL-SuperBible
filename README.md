@@ -1,3 +1,16 @@
-# OpenGL-SuperBible
+OpenGL SuperBible 7th Edition Source Code
+=========================================
 
-Sellers, G., Wright Jr, R. S., & Haemel, N. (2013). [OpenGL superBible: comprehensive tutorial and reference. Addison-Wesley](https://scholar.google.com/scholar?hl=zh-CN&as_sdt=0%2C5&q=OpenGL+superBible%3A+comprehensive+tutorial+and+reference.+Addison-Wesley&btnG=).
+This is the repository for the example source code for the 7th edition of the
+OpenGL SuperBible. Please read HOWTOBUILD.txt. It tells you how to build and
+run the examples.
+
+*Note that to run these examples, you need the associated media files which
+are available from http://openglsuperbible.com/files/superbible7-media.zip*.
+
+
+## Chapter 2. Our first OpenGL Program
+2023-12-10 13:42:25
+
+Notice: executable files need compiling into **WIN32 Application**.
+

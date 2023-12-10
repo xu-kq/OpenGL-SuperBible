@@ -1,0 +1,5 @@
+bin/
+build/
+*.txt.user
+.idea/
+lib/
