@@ -157,7 +157,4 @@ ADD_CUSTOM_TARGET(debug ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE:STRING=Debug ${PROJE
 ADD_CUSTOM_TARGET(release ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE:STRING=Release ${PROJECT_SOURCE_DIR})
 
 
-project(main)
-add_executable(main WIN32 main.cpp)
-set_property(TARGET main PROPERTY DEBUG_POSTFIX _d)
-target_link_libraries(main ${COMMON_LIBS})
+add_subdirectory(demo)
