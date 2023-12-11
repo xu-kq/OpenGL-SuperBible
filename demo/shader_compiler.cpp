@@ -4,7 +4,6 @@
 
 #include "shader_compiler.h"
 
-#define MACRO_STRING(x) #x
 
 namespace Demo {
     Shader_Program::Shader_Program() : shader_file_map {
@@ -27,7 +26,7 @@ namespace Demo {
 
         std::ifstream shader_file;
         shader_file.open(shader_file_map[ShaderType]);
-        std:std::stringstream buffer;
+        std::stringstream buffer;
         buffer << shader_file.rdbuf();
         std::string shader_code = buffer.str();
         const char* p_shader_code = shader_code.c_str();

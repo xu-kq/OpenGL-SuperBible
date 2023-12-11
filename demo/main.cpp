@@ -26,11 +26,12 @@ public:
     }
 
     void startup() override {
-        sp_program.reset(new Demo::Shader_Program);
+        sp_program.reset(new Demo::Shader_Program());
 
         sp_program->compile(GL_VERTEX_SHADER)
                 .compile(GL_TESS_CONTROL_SHADER)
                 .compile(GL_TESS_EVALUATION_SHADER)
+                .compile(GL_GEOMETRY_SHADER)
                 .compile(GL_FRAGMENT_SHADER)
                 .link();
         rendering_program = sp_program->get();
@@ -39,6 +40,7 @@ public:
         glBindVertexArray(vertex_array_object);
 
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glPointSize(5.0);
     }
 
     void shutdown() override {
