@@ -1,85 +1,110 @@
 //
 // Created by xukq on 23/12/10.
 //
-#define _USE_MATH_DEFINES
-#include "sb7.h"
-#include "shader_compiler.h"
-#include <sb7color.h>
+#include <memory>
+#include <sb7.h>
 #include <vmath.h>
+
+#include <object.h>
+#include <sb7ktx.h>
+#include "shader_compiler.h"
 
 
 class my_application : public sb7::application {
 public:
+    my_application() : tex_index{0} {
+    }
+
     void render(double currentTime) override {
-        glClearBufferfv(GL_COLOR, 0, sb7::color::Green);
+        static const GLfloat gray[] = {0.2f, 0.2f, 0.2f, 1.0f};
+        static const GLfloat ones[] = {1.0f};
+
+        glClearBufferfv(GL_COLOR, 0, gray);
+        glClearBufferfv(GL_DEPTH, 0, ones);
+
+        glViewport(0, 0, info.windowWidth, info.windowHeight);
+
+        glBindTexture(GL_TEXTURE_2D, tex_object[tex_index]);
 
         glUseProgram(program);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        vmath::mat4 proj_matrix = vmath::perspective(60.0f, (float) info.windowWidth / (float) info.windowHeight, 0.1f,
+                                                     1000.0f);
+        vmath::mat4 mv_matrix = vmath::translate(0.0f, 0.0f, -3.0f) *
+                                vmath::rotate((float) currentTime * 19.3f, 0.0f, 1.0f, 0.0f) *
+                                vmath::rotate((float) currentTime * 21.1f, 0.0f, 0.0f, 1.0f);
+
+        glUniformMatrix4fv(uniforms.mv_matrix, 1, GL_FALSE, mv_matrix);
+        glUniformMatrix4fv(uniforms.proj_matrix, 1, GL_FALSE, proj_matrix);
+
+        object.render();
     }
 
     void startup() override {
-        GLuint vao;
-        glGenVertexArrays(1, &vao);
-        glBindVertexArray(vao);
-
-        static const GLfloat vertex_positions[] =
+#define B 0x00, 0x00, 0x00, 0x00
+#define W 0xFF, 0xFF, 0xFF, 0xFF
+        static const GLubyte tex_data[] =
         {
-            -0.75f, -0.75f, 0.5,
-            0.75f, -0.75f, 0.5,
-            0.75f, 0.75f, 0.5,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
+            B, W, B, W, B, W, B, W, B, W, B, W, B, W, B, W,
+            W, B, W, B, W, B, W, B, W, B, W, B, W, B, W, B,
         };
-        GLuint buffer;
-        glGenBuffers(1, &buffer);
+#undef B
+#undef W
 
-        glBindBuffer(GL_ARRAY_BUFFER, buffer);
+        glGenTextures(1, &tex_object[0]);
+        glBindTexture(GL_TEXTURE_2D, tex_object[0]);
+        glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGB8, 16, 16);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 16, 16, GL_RGBA, GL_UNSIGNED_BYTE, tex_data);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        glBufferStorage(GL_ARRAY_BUFFER, sizeof(vertex_positions), vertex_positions, GL_DYNAMIC_STORAGE_BIT);
+        tex_object[1] = sb7::ktx::file::load("media/textures/pattern1.ktx");
 
-        glVertexArrayVertexBuffer(vao, 0, buffer, 0, 3 * sizeof(float));
-        glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
-        glVertexArrayAttribBinding(vao, 0, 0);
-        glEnableVertexArrayAttrib(vao, 0);
-
-
-        GLuint texture;
-        glCreateTextures(GL_TEXTURE_2D, 1, &texture);
-
-        glTextureStorage2D(texture, 1, GL_RGBA32F, 256, 256);
-
-        glBindTexture(GL_TEXTURE_2D, texture); {
-            float* data = new float[256 * 256 * 4];
-            generate_texture(data, 256, 256);
-
-            glTextureSubImage2D(texture,
-                                0,
-                                0, 0,
-                                256, 256,
-                                GL_RGBA,
-                                GL_FLOAT,
-                                data);
-            delete[] data;
-        } {
+        object.load("media/objects/torus_nrms_tc.sbm"); {
             sp_program.reset(new Demo::Shader_Program());
             sp_program->compile(GL_VERTEX_SHADER)
                     .compile(GL_FRAGMENT_SHADER)
                     .link();
             program = sp_program->get();
         }
+
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LEQUAL);
+
+
+        uniforms.mv_matrix = glGetUniformLocation(program, "mv_matrix");
+        uniforms.proj_matrix = glGetUniformLocation(program, "proj_matrix");
     }
 
-    void onResize(int w, int h) {
-        // sb7::application::onResize(w, h);
-        //
-        // aspect = (float) info.windowWidth / (float) info.windowHeight;
-        // proj_matrix = vmath::perspective(50.f,
-        //                                  aspect,
-        //                                  0.1f,
-        //                                  1000.f);
+    virtual void onKey(int key, int action) override {
+        if (action) {
+            switch (key) {
+                case 'T':
+                    tex_index++;
+                    if (tex_index > 1)
+                        tex_index = 0;
+                    break;
+            }
+        }
     }
 
     void shutdown() override {
-        glDeleteVertexArrays(1, &vao);
         glDeleteProgram(program);
+        glDeleteTextures(2, tex_object);
     }
 
 private:
@@ -95,12 +120,22 @@ private:
     }
 
 private:
+    GLuint render_prog;
+
+    GLuint tex_object[2];
+    GLuint tex_index;
+
+    struct {
+        GLint mv_matrix;
+        GLint proj_matrix;
+    } uniforms;
+
+    sb7::object object;
+
+private:
     GLuint program;
     GLuint vao;
     std::shared_ptr<Demo::Shader_Program> sp_program;
-
-    // float aspect;
-    // vmath::mat4 proj_matrix;
 };
 
 DECLARE_MAIN(my_application);
