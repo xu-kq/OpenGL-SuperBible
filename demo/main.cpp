@@ -52,10 +52,6 @@ public:
         program = sp_program->get();
 
 
-        // glEnable(GL_DEPTH_TEST);
-        // glDepthFunc(GL_LEQUAL);
-
-
         uniforms.mvp = glGetUniformLocation(program, "mvp");
         uniforms.offset = glGetUniformLocation(program, "offset");
 
