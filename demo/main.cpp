@@ -9,6 +9,20 @@
 #include <sb7ktx.h>
 #include "shader_compiler.h"
 
+static unsigned int seed = 0x13371337;
+
+static inline float random_float() {
+    float res;
+    unsigned int tmp;
+
+    seed *= 16807;
+
+    tmp = seed ^ (seed >> 4) ^ (seed << 15);
+
+    *((unsigned int *) &res) = (tmp >> 9) | 0x3F800000;
+
+    return (res - 1.0f);
+}
 
 class my_application : public sb7::application {
 public:
@@ -21,25 +35,23 @@ public:
 
         glUseProgram(program);
 
-        vmath::mat4 proj_matrix = vmath::perspective(60.0f,
-                                                     (float) info.windowWidth / (float) info.windowHeight,
-                                                     0.1f, 1000.0f);
+        // ctor
+        glBindBufferRange(GL_UNIFORM_BUFFER, 0, rain_buffer, 0, 256 * sizeof(vmath::vec4));
+        // assign value
+        vmath::vec4* droplet = (vmath::vec4 *) glMapNamedBufferRange(rain_buffer, 0, 256 * sizeof(vmath::vec4),
+                                                                     GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
 
-        glUniform1f(uniforms.offset, t * 0.003f);
 
+        for (int i = 0; i < 256; ++i) {
+            droplet[i][0] = droplet_x_offset[i];
+            droplet[i][1] = 2.0f - fmodf((t + float(i)) * droplet_fall_speed[i], 4.31f);
+            droplet[i][2] = t * droplet_rot_speed[i];
+            droplet[i][3] = 0.0f;
+        }
+        glUnmapNamedBuffer(rain_buffer);
 
-        GLuint textures[] = {tex_wall, tex_floor, tex_wall, tex_ceiling};
-        for (int i = 0; i < 4; ++i) {
-            vmath::mat4 mv_matrix =
-                    vmath::rotate(90.0f * (float) i, vmath::vec3(0.0f, 0.0f, 1.0f)) *
-                    vmath::translate(-0.5f, 0.0f, -10.0f) *
-                    vmath::rotate(90.0f, 0.0f, 1.0f, 0.0f) *
-                    vmath::scale(30.0f, 1.0f, 1.0f);
-            vmath::mat4 mvp = proj_matrix * mv_matrix;
-
-            glUniformMatrix4fv(uniforms.mvp, 1, GL_FALSE, mvp);
-
-            glBindTextureUnit(0, textures[i]);
+        for (int alien_index = 0; alien_index < 256; ++alien_index) {
+            glVertexAttribI1i(0, alien_index);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -52,23 +64,26 @@ public:
         program = sp_program->get();
 
 
-        uniforms.mvp = glGetUniformLocation(program, "mvp");
-        uniforms.offset = glGetUniformLocation(program, "offset");
+        GLuint tex_alien_array = sb7::ktx::file::load("media/textures/aliens.ktx");
+        glBindTextureUnit(0, tex_alien_array);
+        glTextureParameteri(tex_alien_array, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+        glCreateBuffers(1, &rain_buffer);
+        // alloc
+        glNamedBufferStorage(rain_buffer, 256 * sizeof(vmath::vec4), NULL, GL_MAP_WRITE_BIT);
+
+
+        for (int i = 0; i < 256; ++i) {
+            droplet_x_offset[i] = random_float() * 2.0f - 1.0f;
+            droplet_rot_speed[i] = (random_float() + 0.5f) * ((i & 1) ? -3.0f : 3.0f);
+            droplet_fall_speed[i] = random_float() + 0.2f;
+        }
 
         glCreateVertexArrays(1, &vao);
         glBindVertexArray(vao);
 
-        tex_wall = sb7::ktx::file::load("media/textures/brick.ktx");
-        tex_ceiling = sb7::ktx::file::load("media/textures/ceiling.ktx");
-        tex_floor = sb7::ktx::file::load("media/textures/floor.ktx");
-
-        GLuint textures[] = {tex_floor, tex_wall, tex_ceiling};
-
-        for (int i = 0; i < 3; ++i) {
-            glBindTextureUnit(0, textures[i]);
-            glTextureParameteri(textures[i], GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-            glTextureParameteri(textures[i], GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        }
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
 
@@ -76,21 +91,16 @@ public:
         glDeleteProgram(program);
     }
 
-
-private:
-    struct {
-        GLint mvp;
-        GLint offset;
-    } uniforms;
-
 private:
     GLuint vao;
     GLuint program;
     std::shared_ptr<Demo::Shader_Program> sp_program;
 
-    GLuint tex_wall;
-    GLuint tex_ceiling;
-    GLuint tex_floor;
+    GLuint rain_buffer;
+
+    float droplet_x_offset[256];
+    float droplet_rot_speed[256];
+    float droplet_fall_speed[256];
 };
 
 DECLARE_MAIN(my_application);
