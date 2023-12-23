@@ -1,16 +1,15 @@
 #version 450 core
 
-layout(location = 0) out vec4 color;
 
-in VS_OUT
-{
-   flat int alien;
-   vec2 tc;
-} fs_in;
+layout (binding =  0, rgba32ui) readonly uniform uimage2D image_in;
 
-layout (binding = 0) uniform sampler2DArray tex_aliens;
+layout (binding = 1) uniform writeonly uimage2D image_out;
 
 void main(void)
 {
-   color = texture(tex_aliens, vec3(fs_in.tc, float(fs_in.alien)));
+    ivec2 P = ivec2(gl_FragCoord.xy);
+
+    uvec4 data = imageLoad(image_in, P);
+
+    imageStore(image_out, P, data);
 }

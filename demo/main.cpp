@@ -9,98 +9,150 @@
 #include <sb7ktx.h>
 #include "shader_compiler.h"
 
-static unsigned int seed = 0x13371337;
-
-static inline float random_float() {
-    float res;
-    unsigned int tmp;
-
-    seed *= 16807;
-
-    tmp = seed ^ (seed >> 4) ^ (seed << 15);
-
-    *((unsigned int *) &res) = (tmp >> 9) | 0x3F800000;
-
-    return (res - 1.0f);
-}
 
 class my_application : public sb7::application {
 public:
+    void init() override {
+        static const char title[] = "OpenGL - Fragment List";
+
+        sb7::application::init();
+
+        memcpy(info.title, title, sizeof(title));
+    }
+
     void render(double currentTime) override {
-        static const GLfloat black[] = {0.0f, 0.0f, 0.0f, 0.0f};
-        float t = (float) currentTime;
+        static const GLfloat zeros[] = {0.0f, 0.0f, 0.0f, 0.0f};
+        static const GLfloat gray[] = {0.1f, 0.1f, 0.1f, 0.0f};
+        static const GLfloat ones[] = {1.0f};
+        const float f = (float) currentTime;
 
         glViewport(0, 0, info.windowWidth, info.windowHeight);
-        glClearBufferfv(GL_COLOR, 0, black);
 
-        glUseProgram(program);
+        glMemoryBarrier(
+            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
-        // ctor
-        glBindBufferRange(GL_UNIFORM_BUFFER, 0, rain_buffer, 0, 256 * sizeof(vmath::vec4));
-        // assign value
-        vmath::vec4* droplet = (vmath::vec4 *) glMapNamedBufferRange(rain_buffer, 0, 256 * sizeof(vmath::vec4),
-                                                                     GL_MAP_WRITE_BIT | GL_MAP_INVALIDATE_BUFFER_BIT);
+        glUseProgram(clear_program);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+        glUseProgram(append_program);
+
+        vmath::mat4 model_matrix = vmath::scale(7.0f);
+        vmath::vec3 view_position = vmath::vec3(cosf(f * 0.35f) * 120.0f, cosf(f * 0.4f) * 30.0f,
+                                                sinf(f * 0.35f) * 120.0f);
+        vmath::mat4 view_matrix = vmath::lookat(view_position,
+                                                vmath::vec3(0.0f, 30.0f, 0.0f),
+                                                vmath::vec3(0.0f, 1.0f, 0.0f));
+
+        vmath::mat4 mv_matrix = view_matrix * model_matrix;
+        vmath::mat4 proj_matrix = vmath::perspective(50.0f,
+                                                     (float) info.windowWidth / (float) info.windowHeight,
+                                                     0.1f,
+                                                     1000.0f);
+
+        glUniformMatrix4fv(uniforms.mvp, 1, GL_FALSE, proj_matrix * mv_matrix);
+
+        static const unsigned int zero = 0;
+        glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, 0, atomic_counter_buffer);
+        glNamedBufferSubData(atomic_counter_buffer, 0, sizeof(zero), &zero);
 
 
-        for (int i = 0; i < 256; ++i) {
-            droplet[i][0] = droplet_x_offset[i];
-            droplet[i][1] = 2.0f - fmodf((t + float(i)) * droplet_fall_speed[i], 4.31f);
-            droplet[i][2] = t * droplet_rot_speed[i];
-            droplet[i][3] = 0.0f;
-        }
-        glUnmapNamedBuffer(rain_buffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, fragment_buffer);
 
-        for (int alien_index = 0; alien_index < 256; ++alien_index) {
-            glVertexAttribI1i(0, alien_index);
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-        }
+        glBindImageTexture(0, head_pointer_image, 0, GL_FALSE, 0, GL_READ_WRITE, GL_R32UI);
+
+        glMemoryBarrier(
+            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+        object.render();
+
+        glMemoryBarrier(
+            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+        glUseProgram(resolve_program);
+
+        glMemoryBarrier(
+            GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_ATOMIC_COUNTER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     }
 
     void startup() override {
-        sp_program.reset(new Demo::Shader_Program());
-        sp_program->compile(GL_VERTEX_SHADER)
-                .compile(GL_FRAGMENT_SHADER)
-                .link();
-        program = sp_program->get();
+        load_render();
 
+        glCreateBuffers(1, &uniforms_buffer);
+        glNamedBufferStorage(uniforms_buffer, sizeof(uniforms_block), nullptr, GL_DYNAMIC_DRAW);
 
-        GLuint tex_alien_array = sb7::ktx::file::load("media/textures/aliens.ktx");
-        glBindTextureUnit(0, tex_alien_array);
-        glTextureParameteri(tex_alien_array, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        object.load("media/objects/dragon.sbm");
 
-        glCreateBuffers(1, &rain_buffer);
-        // alloc
-        glNamedBufferStorage(rain_buffer, 256 * sizeof(vmath::vec4), NULL, GL_MAP_WRITE_BIT);
+        glCreateBuffers(1, &fragment_buffer);
+        glNamedBufferData(fragment_buffer, 1024 * 1024 * 16, nullptr, GL_DYNAMIC_COPY);
 
+        glCreateBuffers(1, &atomic_counter_buffer);
+        glNamedBufferData(atomic_counter_buffer, 4, nullptr, GL_DYNAMIC_COPY);
 
-        for (int i = 0; i < 256; ++i) {
-            droplet_x_offset[i] = random_float() * 2.0f - 1.0f;
-            droplet_rot_speed[i] = (random_float() + 0.5f) * ((i & 1) ? -3.0f : 3.0f);
-            droplet_fall_speed[i] = random_float() + 0.2f;
-        }
+        glCreateTextures(GL_TEXTURE_2D, 1, &head_pointer_image);
+        glTextureStorage2D(head_pointer_image, 1, GL_R32UI, 1024, 1024);
 
-        glCreateVertexArrays(1, &vao);
-        glBindVertexArray(vao);
-
-        glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glCreateVertexArrays(1, &dummy_vao);
+        glBindVertexArray(dummy_vao);
     }
 
+    void load_render() {
+        Demo::Shader_Program clearProg("w");
+        clear_program = clearProg
+                .compile(GL_VERTEX_SHADER, "../demo/clear.vs.glsl")
+                .compile(GL_FRAGMENT_SHADER, "../demo/clear.fs.glsl")
+                .link().get();
+
+        Demo::Shader_Program appendProg("a");
+        append_program = appendProg
+                .compile(GL_VERTEX_SHADER, "../demo/append.vs.glsl")
+                .compile(GL_FRAGMENT_SHADER, "../demo/append.fs.glsl")
+                .link().get();
+
+        uniforms.mvp = glGetUniformLocation(append_program, "mvp");
+
+        Demo::Shader_Program resolveProg("a");
+        resolve_program = resolveProg
+                .compile(GL_VERTEX_SHADER, "../demo/resolve.vs.glsl")
+                .compile(GL_FRAGMENT_SHADER, "../demo/resolve.fs.glsl")
+                .link().get();
+    }
 
     void shutdown() override {
-        glDeleteProgram(program);
+        glDeleteProgram(clear_program);
+        glDeleteProgram(append_program);
+        glDeleteProgram(resolve_program);
     }
 
 private:
-    GLuint vao;
-    GLuint program;
-    std::shared_ptr<Demo::Shader_Program> sp_program;
+    GLuint clear_program;
+    GLuint append_program;
+    GLuint resolve_program;
 
-    GLuint rain_buffer;
+    struct {
+        GLuint color;
+        GLuint normal;
+    } textures;
 
-    float droplet_x_offset[256];
-    float droplet_rot_speed[256];
-    float droplet_fall_speed[256];
+    struct uniforms_block {
+        vmath::mat4 mv_matrix;
+        vmath::mat4 view_matrix;
+        vmath::mat4 resolve_matrix;
+    };
+
+    GLuint uniforms_buffer;
+
+    struct {
+        GLint mvp;
+    } uniforms;
+
+    sb7::object object;
+
+    GLuint fragment_buffer;
+    GLuint head_pointer_image;
+    GLuint atomic_counter_buffer;
+    GLuint dummy_vao;
 };
 
 DECLARE_MAIN(my_application);
