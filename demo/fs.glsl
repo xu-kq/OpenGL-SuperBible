@@ -1,15 +1,10 @@
 #version 450 core
 
+in vec4 color;
 
-layout (binding =  0, rgba32ui) readonly uniform uimage2D image_in;
-
-layout (binding = 1) uniform writeonly uimage2D image_out;
+out vec4 output_color;
 
 void main(void)
 {
-    ivec2 P = ivec2(gl_FragCoord.xy);
-
-    uvec4 data = imageLoad(image_in, P);
-
-    imageStore(image_out, P, data);
+    output_color = color;
 }
