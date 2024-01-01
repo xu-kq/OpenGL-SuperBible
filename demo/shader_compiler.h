@@ -12,7 +12,7 @@
 namespace Demo {
     class Shader_Program {
     public:
-        Shader_Program() : Shader_Program(write_mode = "w") {}
+        Shader_Program() : Shader_Program( "w") {}
         Shader_Program(std::string write_mode);
 
         Shader_Program& compile(GLenum ShaderType);
