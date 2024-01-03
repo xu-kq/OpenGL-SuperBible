@@ -1,10 +1,12 @@
 #version 450 core
 
-in vec4 color;
+in Fragment {
+    vec4 color;
+} fragment;
 
-out vec4 output_color;
+out vec4 color;
 
 void main(void)
 {
-    output_color = color;
+    color = fragment.color;
 }
